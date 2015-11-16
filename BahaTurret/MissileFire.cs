@@ -2444,7 +2444,7 @@ namespace BahaTurret
 					float gimbalTolerance = vessel.Landed ? 0 : 15;
 					if(((!vessel.Landed && pilotAI) || (TargetInTurretRange(weapon, gimbalTolerance))) && weapon.maxEffectiveDistance >= finalDistance)
 					{
-						if(CheckAmmo(weapon))
+						if(CheckAmmo(weapon) && !weapon.isOverheated)
 						{
 							if(BDArmorySettings.DRAW_DEBUG_LABELS)
 							{
