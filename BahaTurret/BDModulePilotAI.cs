@@ -552,11 +552,7 @@ namespace BahaTurret
 				}
 			}
 
-			float AoA = Vector3.Angle(vessel.ReferenceTransform.forward, vessel.srf_velocity);
-			if(AoA > 25)
-			{
-				steerMode = SteerModes.Aiming;
-			}
+
 
 
 
@@ -601,7 +597,6 @@ namespace BahaTurret
 		}
 
 
-		
 					
 
 		void FlyToPosition(FlightCtrlState s, Vector3 targetPosition)
@@ -611,7 +606,6 @@ namespace BahaTurret
 				targetPosition = FlightPosition(targetPosition, minAltitude);
 				targetPosition = vesselTransform.position + ((targetPosition - vesselTransform.position).normalized * 100);
 			}
-
 
 			Vector3d srfVel = vessel.srf_velocity;
 			if(srfVel != Vector3d.zero)

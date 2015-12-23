@@ -16,8 +16,10 @@ namespace BahaTurret
 		public static bool BULLET_HITS = true;
 		public static float PHYSICS_RANGE = 0;
 		public static bool EJECT_SHELLS = true;
+
+		public static bool SHELL_COLLISIONS = true;
+
 		public static bool INFINITE_AMMO = false;
-		//public static bool CAMERA_TOOLS = true;
 		public static bool DRAW_DEBUG_LINES = false;
 		public static bool DRAW_DEBUG_LABELS = false;
 		public static bool DRAW_AIMERS = true;
@@ -29,6 +31,8 @@ namespace BahaTurret
 		public static bool SMART_GUARDS = true;
 		public static float MAX_BULLET_RANGE = 8000;
 		public static float TRIGGER_HOLD_TIME = 0.3f;
+
+
 
 		public static bool ALLOW_LEGACY_TARGETING = true;
 
@@ -510,40 +514,47 @@ namespace BahaTurret
 				DrawAimerCursor();
 			}
 		}
-		
+
+
+
 		void DrawAimerCursor()
 		{
 			if(ActiveWeaponManager == null)
 			{
+				Screen.showCursor = true;
 				return;
 			}
 
-			Screen.showCursor = true;
+
 			drawCursor = false;
 			if(!MapView.MapIsEnabled && !Misc.CheckMouseIsOnGui() && !PauseMenu.isOpen)
 			{
-				/*
-				foreach(BahaTurret bt in FlightGlobals.ActiveVessel.FindPartModulesImplementing<BahaTurret>())
+				if(ActiveWeaponManager.weaponIndex > 0)
 				{
-					if(bt.deployed && DRAW_AIMERS && bt.maxPitch > 1)
+					if(ActiveWeaponManager.selectedWeapon.GetWeaponClass() == WeaponClasses.Gun || ActiveWeaponManager.selectedWeapon.GetWeaponClass() == WeaponClasses.DefenseLaser)
 					{
-						Screen.showCursor = false;
-						drawCursor = true;
-						return;
+						ModuleWeapon mw = ActiveWeaponManager.selectedWeapon.GetPart().FindModuleImplementing<ModuleWeapon>();
+						if(mw.weaponState == ModuleWeapon.WeaponStates.Enabled && mw.maxPitch > 1 && !mw.slaved && !mw.aiControlled)
+						{
+							Screen.showCursor = false;
+							drawCursor = true;
+							return;
+						}
 					}
-				}
-				*/
-
-				foreach(ModuleWeapon mw in FlightGlobals.ActiveVessel.FindPartModulesImplementing<ModuleWeapon>())
-				{
-					if(mw.weaponState == ModuleWeapon.WeaponStates.Enabled && mw.maxPitch > 1 && !mw.slaved && !mw.aiControlled)
+					else if(ActiveWeaponManager.selectedWeapon.GetWeaponClass() == WeaponClasses.Rocket)
 					{
-						Screen.showCursor = false;
-						drawCursor = true;
-						return;
+						RocketLauncher rl = ActiveWeaponManager.selectedWeapon.GetPart().FindModuleImplementing<RocketLauncher>();
+						if(rl.readyToFire && rl.turret)
+						{
+							Screen.showCursor = false;
+							drawCursor = true;
+							return;
+						}
 					}
 				}
 			}
+
+			Screen.showCursor = true;
 		}
 		
 	
@@ -722,10 +733,13 @@ namespace BahaTurret
 				if(drawCursor)
 				{
 					//mouse cursor
+					int origDepth = GUI.depth;
+					GUI.depth = -100;
 					float cursorSize = 40;
 					Vector3 cursorPos = Input.mousePosition;
 					Rect cursorRect = new Rect(cursorPos.x - (cursorSize/2), Screen.height - cursorPos.y - (cursorSize/2), cursorSize, cursorSize);
 					GUI.DrawTexture(cursorRect, cursorTexture);	
+					GUI.depth = origDepth;
 				}
 				
 				if(toolbarGuiEnabled && HighLogic.LoadedSceneIsFlight)
@@ -1058,7 +1072,7 @@ namespace BahaTurret
 					{
 						numberOfModules++;
 						GUIStyle moduleStyle = mr.radarEnabled ? centerLabelBlue : centerLabel;
-						string label = mr.part.partInfo.title;
+						string label = mr.radarName;
 						if(GUI.Button(new Rect(leftIndent, +(moduleLines*entryHeight), contentWidth, entryHeight), label, moduleStyle))
 						{
 							mr.Toggle();
