@@ -8,6 +8,13 @@ namespace BahaTurret
 	public class ModuleRadar : PartModule
 	{
 		[KSPField]
+		public string radarName;
+
+		[KSPField]
+		public int turretID = 0;
+
+
+		[KSPField]
 		public bool canLock = true;
 		public bool locked = false;
 
@@ -137,10 +144,12 @@ namespace BahaTurret
 		public MissileLauncher lastMissile;
 
 		public ModuleTurret lockingTurret;
+		public bool lockingPitch = true;
+		public bool lockingYaw = true;
 
 		public MissileFire weaponManager;
 
-		[KSPEvent(active = true, guiActive = true, guiActiveEditor = false)]
+		[KSPEvent(active = true, guiActive = true, guiActiveEditor = false, guiName = "Toggle Radar")]
 		public void Toggle()
 		{
 			if(radarEnabled)
@@ -151,6 +160,11 @@ namespace BahaTurret
 			{
 				EnableRadar();
 			}
+		}
+
+		void UpdateToggleGuiName()
+		{
+			Events["Toggle"].guiName = radarEnabled ? "Disable Radar" : "Enable Radar";
 		}
 
 		public void EnableRadar()
@@ -170,6 +184,8 @@ namespace BahaTurret
 				weaponManager = mf;
 				break;
 			}
+
+			UpdateToggleGuiName();
 		}
 
 		public void DisableRadar()
@@ -181,7 +197,7 @@ namespace BahaTurret
 				mf.radar = null;
 				break;
 			}
-
+			UpdateToggleGuiName();
 		}
 		
 
@@ -192,6 +208,11 @@ namespace BahaTurret
 			if(HighLogic.LoadedSceneIsFlight)
 			{
 				RadarUtils.SetupRadarCamera();
+
+				if(string.IsNullOrEmpty(radarName))
+				{
+					radarName = part.partInfo.title;
+				}
 
 				distanceStyle = new GUIStyle();
 				distanceStyle.normal.textColor = new Color(0,1,0,0.75f);
@@ -239,7 +260,14 @@ namespace BahaTurret
 				referenceTransform.parent = transform;
 				referenceTransform.localPosition = Vector3.zero;
 
-				lockingTurret = part.FindModuleImplementing<ModuleTurret> ();
+				foreach(var tur in part.FindModulesImplementing<ModuleTurret>())
+				{
+					if(tur.turretID == turretID)
+					{
+						lockingTurret = tur;
+						break;
+					}
+				}
 
 				rwrType = (RadarWarningReceiver.RWRThreatTypes) rwrThreatType;
 
@@ -251,7 +279,25 @@ namespace BahaTurret
 				}
 
 				StartCoroutine(StartUpRoutine());
+			}
 
+			if(HighLogic.LoadedSceneIsEditor)
+			{
+				foreach(var tur in part.FindModulesImplementing<ModuleTurret>())
+				{
+					if(tur.turretID == turretID)
+					{
+						lockingTurret = tur;
+						break;
+					}
+				}
+
+				if(lockingTurret)
+				{
+					lockingTurret.Fields["minPitch"].guiActiveEditor = false;
+					lockingTurret.Fields["maxPitch"].guiActiveEditor = false;
+					lockingTurret.Fields["yawRange"].guiActiveEditor = false;
+				}
 			}
 		}
 
@@ -292,6 +338,8 @@ namespace BahaTurret
 
 			}
 
+			UpdateToggleGuiName();
+
 			unlinkNullRadar = true;
 		}
 		
@@ -314,6 +362,8 @@ namespace BahaTurret
 			}
 
 			drawGUI = (HighLogic.LoadedSceneIsFlight && FlightGlobals.ready && !vessel.packed && radarEnabled && vessel.isActiveVessel && BDArmorySettings.GAME_UI_ENABLED);
+
+			UpdateSlaveData();
 		}
 
 		void FixedUpdate()
@@ -349,6 +399,20 @@ namespace BahaTurret
 					{
 						UnlinkRadar();
 					}
+				}
+			}
+		}
+
+		void UpdateSlaveData()
+		{
+			if(slaveTurrets && weaponManager)
+			{
+				weaponManager.slavingTurrets = true;
+				if(locked)
+				{
+					weaponManager.slavedPosition = lockedTarget.predictedPosition;
+					weaponManager.slavedVelocity = lockedTarget.velocity;
+					weaponManager.slavedAcceleration = lockedTarget.acceleration;
 				}
 			}
 		}
@@ -524,7 +588,7 @@ namespace BahaTurret
 					{
 						if(locked)
 						{
-							lockingTurret.AimToTarget(lockedTarget.predictedPosition);
+							lockingTurret.AimToTarget(lockedTarget.predictedPosition, lockingPitch, lockingYaw);
 						}
 						else
 						{
@@ -722,7 +786,7 @@ namespace BahaTurret
 			}
 		}
 
-		void UnlockTarget()
+		public void UnlockTarget()
 		{
 			lockedTarget = TargetSignatureData.noTarget;
 			locked = false;
@@ -778,6 +842,13 @@ namespace BahaTurret
 			{
 				rad.slaveTurrets = false;
 			}
+
+			if(weaponManager)
+			{
+				weaponManager.slavingTurrets = false;
+			}
+
+			slaveTurrets = false;
 		}
 
 		void OnGUI()

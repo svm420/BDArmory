@@ -116,6 +116,15 @@ namespace BahaTurret
 		[KSPField]
 		public float tracerLength = 0; //if set to zero, tracer will be the length of the distance covered by the projectile in one physics timestep
 		[KSPField]
+		public float tracerDeltaFactor = 2.65f;
+		[KSPField]
+		public float nonTracerWidth = 0.01f;
+		[KSPField]
+		public int tracerInterval = 0;
+		[KSPField]
+		public float tracerLuminance = 1.75f;
+		int tracerIntervalCounter = 0;
+		[KSPField]
 		public string bulletTexturePath = "BDArmory/Textures/bullet";
 
 		[KSPField]
@@ -215,6 +224,8 @@ namespace BahaTurret
 		[KSPField(isPersistant = true, guiActive = true, guiActiveEditor = true, guiName = "Default Detonation Range"),
 		 UI_FloatRange(minValue = 500, maxValue = 3500f, stepIncrement = 1f, scene = UI_Scene.All)]
 		public float defaultDetonationRange = 3500;
+		[KSPField]
+		public float maxAirDetonationRange = 3500;
 		float detonationRange = 2000;
 
 		//auto proximity tracking
@@ -228,6 +239,8 @@ namespace BahaTurret
 
 
 		//module references
+		[KSPField]
+		public int turretID = 0;
 		public ModuleTurret turret;
 		MissileFire mf = null;
 		public MissileFire weaponManager
@@ -351,7 +364,17 @@ namespace BahaTurret
 				shortName = part.partInfo.title;
 			}
 
-			if(!airDetonation)
+			foreach(var emitter in part.FindModelComponents<KSPParticleEmitter>())
+			{
+				emitter.emit = false;
+			}
+
+			if(airDetonation)
+			{
+				var detRange = (UI_FloatRange)Fields["defaultDetonationRange"].uiControlEditor;
+				detRange.maxValue = maxAirDetonationRange;
+			}
+			else
 			{
 				Fields["defaultDetonationRange"].guiActive = false;
 				Fields["defaultDetonationRange"].guiActiveEditor = false;
@@ -417,7 +440,15 @@ namespace BahaTurret
 			}
 
 			//turret setup
-			turret = part.FindModuleImplementing<ModuleTurret>();
+			foreach(var turr in part.FindModulesImplementing<ModuleTurret>())
+			{
+				if(turr.turretID == turretID)
+				{
+					turret = turr;
+					break;
+				}
+			}
+
 			if(!turret)
 			{
 				Fields["onlyFireInRange"].guiActive = false;
@@ -573,6 +604,15 @@ namespace BahaTurret
 		{
 			if(HighLogic.LoadedSceneIsFlight && !vessel.packed)
 			{
+				if(!vessel.IsControllable)
+				{
+					if(weaponState != WeaponStates.PoweringDown || weaponState != WeaponStates.Disabled)
+					{
+						DisableWeapon();
+					}
+					return;
+				}
+
 				if(showReloadMeter)
 				{
 					UpdateReloadMeter();
@@ -754,7 +794,7 @@ namespace BahaTurret
 				{
 					if(targetAcquired)
 					{
-						detonationRange = Mathf.Clamp(targetLeadDistance, 500, 3500) - 50f;
+						detonationRange = Mathf.Clamp(targetLeadDistance, 500, maxAirDetonationRange) - 50f;
 					}
 					else
 					{
@@ -917,9 +957,26 @@ namespace BahaTurret
 						pBullet.projectileColor = projectileColorC;
 						pBullet.startColor = startColorC;
 						pBullet.fadeColor = fadeColor;
-						pBullet.tracerStartWidth = tracerStartWidth;
-						pBullet.tracerEndWidth = tracerEndWidth;
+
+						tracerIntervalCounter++;
+						if(tracerIntervalCounter > tracerInterval)
+						{
+							tracerIntervalCounter = 0;
+							pBullet.tracerStartWidth = tracerStartWidth;
+							pBullet.tracerEndWidth = tracerEndWidth;
+						}
+						else
+						{
+							pBullet.tracerStartWidth = nonTracerWidth;
+							pBullet.tracerEndWidth = nonTracerWidth;
+							pBullet.startColor.a *= 0.5f;
+							pBullet.projectileColor.a *= 0.5f;
+						}
+
 						pBullet.tracerLength = tracerLength;
+						pBullet.tracerDeltaFactor = tracerDeltaFactor;
+						pBullet.tracerLuminance = tracerLuminance;
+
 						pBullet.bulletDrop = bulletDrop;
 						
 						if(weaponType == "cannon")
@@ -1297,7 +1354,7 @@ namespace BahaTurret
 			{
 				while(!turret.ReturnTurret()) //wait till turret has returned
 				{
-					yield return null;
+					yield return new WaitForFixedUpdate();
 				}
 			}
 
@@ -1577,6 +1634,7 @@ namespace BahaTurret
 				}
 
 				//radar targeting
+				/*
 				if(weaponManager && weaponManager.radar)
 				{
 					if(weaponManager.radar.locked)
@@ -1616,6 +1674,17 @@ namespace BahaTurret
 					}
 					targetVelocity = Vector3.zero;
 					targetAcceleration = Vector3.zero;
+					targetAcquired = true;
+					return;
+				}
+				*/
+
+				if(weaponManager.slavingTurrets && turret)
+				{
+					slaved = true;
+					targetPosition = weaponManager.slavedPosition + (weaponManager.slavedVelocity*Time.fixedDeltaTime);
+					targetVelocity = weaponManager.slavedVelocity;
+					targetAcceleration = weaponManager.slavedAcceleration;
 					targetAcquired = true;
 					return;
 				}
